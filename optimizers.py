@@ -1,8 +1,21 @@
 """
 Functions
 """
+import numpy as np
+from sklearn.preprocessing import normalize
+from sklearn.linear_model import lasso_path
+
 
 def ALASSO_path(Theta, X_dot, n_alphas = 100, eps = 0.001):
+    """
+    Obtains the Adaptive LASSO/Reweighted L1-norm solution path.
+    Normalizes Theta and X_dot, obtains weights as the inverse of the OLS estimate,
+    and computes the LASSO path introducing the weights through Theta.
+    Output coef_path are not renormalized.
+
+    IN: Theta [n_points, n_features], X_dot [n_points]
+    OUT: alpha_list [n_alphas], coef_path[n_features, n_alphas]
+    """
     X_dotn, normXd = normalize(X_dot.reshape(-1,1), return_norm=True, axis=0)
     Thetan, normTheta = normalize(Theta, return_norm=True, axis=0)
     
