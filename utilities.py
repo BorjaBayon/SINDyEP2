@@ -9,7 +9,7 @@ def print_model(coefs, score, features_names_list, var_name):
     inds_nonzero = np.ravel(np.nonzero(coefs))
     text = "[%.2f] "%(score) + var_name + "_dot = "
     for i in range(len(inds_nonzero)):
-        text += "+ %8.2f %s " % (coefs[j, inds_nonzero[i]], features_names_list[inds_nonzero[i]])
+        text += "+ %8.2f %s " % (coefs[inds_nonzero[i]], features_names_list[inds_nonzero[i]])
     print(text)
 
 def print_hierarchy_f(print_hierarchy, coef_list, n_terms, score, feature_names_list, var_name = "var"):

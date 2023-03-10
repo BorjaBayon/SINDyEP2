@@ -2,7 +2,6 @@
 Functions
 """
 import numpy as np
-import matplotlib as plt
 from sklearn.preprocessing import normalize
 from sklearn.linear_model import lasso_path
 from sklearn.metrics import r2_score
@@ -85,10 +84,6 @@ def fit_supports(Theta, X_dot, supports):
 
         score[i] = r2_score(Theta.dot(coefs[i]), X_dot)
         n_terms[i] = np.count_nonzero(coefs[i])
-
-        ### TEMPORARY
-        plt.figure()
-        plt.scatter(n_terms, 1 - score, color="black", s=12)
     
     return coefs, score, n_terms
 
