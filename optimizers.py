@@ -1,20 +1,35 @@
 """
-Functions
+Functions related to the optimization and support-finding
 """
 import numpy as np
 from sklearn.preprocessing import normalize
 from sklearn.linear_model import lasso_path
 from sklearn.metrics import r2_score
 
-def ALASSO_path(Theta, X_dot, n_alphas = 100, eps = 0.001):
+def ALASSO_path(Theta, X_dot, eps = 1e-3, n_alphas = 100):
     """
     Obtains the Adaptive LASSO/Reweighted L1-norm solution path.
     Normalizes Theta and X_dot, obtains weights as the inverse of the OLS estimate,
     and computes the LASSO path introducing the weights through Theta.
     NOTE: Output coef_path are not renormalized.
+    
+    Parameters
+    ----------
+    Theta : ndarray of shape (n_samples, n_features)
+        Library of features, typically polynomial
+    X_dot : ndarray of shape (n_samples,)
+        Derivative of variable to be fit
+    eps : float, default=1e-3. 
+        Length of the path; eps = alpha_min / alpha_max where alpha_max = np.sqrt( np.sum(X_dot) / (n_samples) ).max()
+    n_alphas: int, default=100
+        Number of alphas along the regularization path
 
-    IN: Theta [n_points, n_features], X_dot [n_points]
-    OUT: alpha_list [n_alphas], coef_path[n_features, n_alphas]
+    Returns
+    -------
+    alpha_list : ndarray of shape (n_alphas,)
+        The alphas along the path where models are computed
+    coef_path : ndarray of shape (n_features, n_alphas)
+        Coefficients along the path
     """
     X_dotn, normXd = normalize(X_dot.reshape(-1,1), return_norm=True, axis=0)
     Thetan, normTheta = normalize(Theta, return_norm=True, axis=0)
@@ -33,8 +48,23 @@ def LASSO_path(Theta, X_dot, n_alphas = 100, eps = 0.001):
     Normalizes Theta and X_dot and computes the LASSO path.
     NOTE: Output coef_path are not renormalized.
 
-    IN: Theta [n_points, n_features], X_dot [n_points]
-    OUT: alpha_list [n_alphas], coef_path[n_features, n_alphas]
+    Parameters
+    ----------
+    Theta : ndarray of shape (n_samples, n_features)
+        Library of features, typically polynomial
+    X_dot : ndarray of shape (n_samples,)
+        Derivative of variable to be fit
+    eps : float, default=1e-3. 
+        Length of the path; eps = alpha_min / alpha_max where alpha_max = np.sqrt( np.sum(X_dot) / (n_samples) ).max()
+    n_alphas: int, default=100
+        Number of alphas along the regularization path
+
+    Returns
+    -------
+    alpha_list : ndarray of shape (n_alphas,)
+        The alphas along the path where models are computed
+    coef_path : ndarray of shape (n_features, n_alphas)
+        Coefficients along the path
     """
     X_dotn, normXd = normalize(X_dot.reshape(-1,1), return_norm=True, axis=0)
     Thetan, normTheta = normalize(Theta, return_norm=True, axis=0)
@@ -49,26 +79,39 @@ def LASSO_path(Theta, X_dot, n_alphas = 100, eps = 0.001):
 
 
 
+
+
+#############################################################
 ## Identify, remove duplicates, fit and find optimal supports
 
 
-def identify_unique_supports(coefs, n_max_features = 10):
+def identify_unique_supports(coef_path, n_max_features = 10):
     """
-    Given a coef list of form [active_coefs, lambda_reg], returns all combinations of individual supports
-    Returns list of supports of len lambda_reg 
+    Given the distribution of coefficients along a solution path, returns every individual support found.
+    
+    Parameters
+    ----------
+    coef_path : ndarray of shape (n_features, n_alphas)
+        Coefficients along the path
+    n_max_features : int, default = 10
+        Maximum of number of features 
+
+    Returns
+    -------
+    supports : ndarray of shape (n_supports,)
     """
     supports = []
-    for row in coefs.T:
+    for row in coef_path.T:
         support_lambdai = list(np.nonzero(row)[0]) # identify index of non-zero elements
 
         if len(support_lambdai) < n_max_features and len(support_lambdai) != 0: 
             supports.append(support_lambdai) # store if support is in the range of interest
     
-    supports = remove_duplicates(supports) # remove duplicate indexes
+    supports = remove_duplicate_supports(supports) # remove duplicate indexes
     return supports
     
 
-def remove_duplicates(lst):
+def remove_duplicate_supports(lst):
     unique_lst = []
 
     for elem in lst:
@@ -82,10 +125,25 @@ def remove_duplicates(lst):
 
 def fit_supports(Theta, X_dot, supports):
     """
-    Use Ordinary Least Squares to obtain the unbiased model estimates for each support
+    Use Ordinary Least Squares to obtain the unbiased model estimates for each support.
+    Normalizes the inputs for fitting but the returned coefficients are renormalized.
 
-    IN: Theta [n_points, n_features], X_dot [n_points], supports [n_supports, n_features]
-    OUT: coefs[n_supports, n_features], score [n_supports], n_terms [n_supports]
+    Parameters
+    ----------
+    Theta : ndarray of shape (n_samples, n_features)
+        Library of features, typically polynomial
+    X_dot : ndarray of shape (n_samples,)
+        Derivative of variable to be fit
+    supports : ndarray of shape (n_supports,)
+
+    Returns
+    -------
+    coefs : ndarray of shape (n_supports, n_features)
+        Unbiased coefficients along the path
+    score : ndarray of shape (n_supports,)
+        R2 Score on the derivatives for each fitted support
+    n_terms : ndarray of shape (n_supports,)
+        Size of each support, i.e. number of non-zero terms of each model
     """
     X_dotn, normXd = normalize(X_dot.reshape(-1,1), return_norm=True, axis=0)
     Thetan, normTheta = normalize(Theta, return_norm=True, axis=0)
@@ -106,11 +164,25 @@ def fit_supports(Theta, X_dot, supports):
 
 def find_optimal_support(coefs, score, n_terms):
     """
-    Computes Pareto distance for each model and returns the one that minimizes said distance
-    For print_hierarchy: 0 > don't print; 1 > print Pareto front; 2 > print all ranked by terms and score
-    
-    IN: coefs[n_supports, n_features], score [n_supports], n_terms [n_supports]
-    OUT: optimal_coef[n_features], index_min [1]
+    Computes Pareto distance for each model and returns the one that minimizes said distance (the "Pareto knee" model):
+
+    d_{Pareto, i} = \sqrt{ (1-R_i^2)^{2} +\left (\frac{n_{terms,i}}{n_{terms,max}+1}  \right )^2}
+
+    Parameters
+    ----------
+    coefs : ndarray of shape (n_supports, n_features)
+        Unbiased coefficients along the path
+    score : ndarray of shape (n_supports,)
+        R2 Score on the derivatives for each fitted support
+    n_terms : ndarray of shape (n_supports,)
+        Size of each support, i.e. number of non-zero terms of each model
+
+    Returns
+    -------
+    optimal_coef : ndarray of shape (n_features,)
+        Unbiased coefficients of the Pareto optimal model
+    index_min : int
+        Index of optimal support within coefs, to retrieve model score and n_terms
     """
     pareto_distance = ( (1 - score)**2 + (n_terms / (np.max(n_terms + 1)))**2 )**0.5
     var_p_d_min = pareto_distance.min()
