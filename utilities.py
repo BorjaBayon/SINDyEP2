@@ -53,7 +53,7 @@ def print_hierarchy_f(print_hierarchy, coef_list, n_terms, score, feature_names_
 
 
 
-### Generate and add noise to synthetic data
+### Generate, add noise and plot synthetic data
 
 def generate_data(time_span, n_points, type, xi=1, w0=3,
                   a = 2/3, b = 1, c = 1, d = 1/3, A = 0, f = 5, state0 = 0):
@@ -94,6 +94,7 @@ def generate_data(time_span, n_points, type, xi=1, w0=3,
 
     return X.T, t
 
+
 def add_noise(data, percentage):
     """
     Input: data array, percentage divided by 100
@@ -101,3 +102,54 @@ def add_noise(data, percentage):
     rmse = mean_squared_error(data, np.zeros(data.shape), squared=False)
     data_noisy = data + np.random.normal(loc=0, scale = rmse*percentage, size = data.shape)
     return data_noisy
+
+
+def plot_data(data, fs, n_plotted=2000, bins=100, names=0, compare = False, data2 = None):
+    """
+    Given array of data with data.shape[1] variables sampled at rate fs, plots time series, derivative 
+    Fourier spectrum and histogram (variable distribution) for each.
+    
+    Can use names to pass array with labels for each variable.
+    """
+    if data.ndim is 1: data = data.reshape(-1, 1)
+    time_steps = data.shape[0]; n_var = data.shape[1]
+
+    fig, axs = plt.subplots(n_var, 5, figsize=(24, 3*n_var), squeeze=False)
+    axs[0,0].set_title("First "+str(n_plotted)+" points of variable"); axs[0,1].set_title("First "+str(n_plotted)+" points of derivative")
+    axs[0,2].set_title("Fourier Spectrum"); axs[0,3].set_title("Distribution"); axs[0,4].set_title("Phase plot")
+    for i in range(n_var):
+        var = data[:,i]
+        f, P = FourierTransform(var, fs, plot=False)
+        if type(names) != int: axs[i, 0].plot(var[:n_plotted], label = names[i]); axs[i, 0].legend()
+        else: axs[i, 0].plot(var[:n_plotted])
+        axs[i, 1].plot(ps.SmoothedFiniteDifference()(var, 1/fs)[:n_plotted])
+        axs[i, 2].semilogx(f, P)
+        axs[i, 3].hist(var, bins=bins)
+        axs[i, 4].scatter(var[:n_plotted], ps.SmoothedFiniteDifference()(var, 1/fs)[:n_plotted], s=3)
+
+        if compare == True: 
+            var2 = data2[:,i]
+            f, P = FourierTransform(var2, fs, plot=False)
+            axs[i, 0].plot(var2[:n_plotted], alpha = 0.5)
+            axs[i, 1].plot(ps.SmoothedFiniteDifference()(var2, 1/fs)[:n_plotted], alpha = 0.5)
+            axs[i, 2].semilogx(f, P, alpha=0.5)
+            axs[i, 3].hist(var2, bins=bins, alpha=0.5)
+            axs[i, 4].scatter(var2[:n_plotted], ps.SmoothedFiniteDifference()(var2, 1/fs)[:n_plotted], s=3, alpha=0.5)
+
+
+def FourierTransform(Xt, Fs, plot=True):
+    """
+    Input: 1D Time series Xt, Sampling frequency Fs,
+    Output: frequency range, real part of frequency power spectrum and Fourier Spectrum plot if plot=True
+    """
+    L = len(Xt)
+    f = Fs*np.arange(int(L/2))/L
+    Xf = np.fft.fft(Xt)
+
+    P2 = abs(Xf/L)
+    P1 = P2[0:int(L/2)]
+    P1[1:-2] = 2*P1[1:-2]
+    P1[0] = 0
+    P1 = P1/np.max(P1)
+    if plot == True: plt.semilogx(f.T, P1)
+    return f, P1
