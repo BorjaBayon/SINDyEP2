@@ -91,7 +91,7 @@ def generate_data(time_span, n_points, type, state0 = 0
                 A = 0, f = 5):
     """
     Generate n_points during time_span of certain data set for initial condition state0. 
-    Types are "lorenz", "harm_osc", "hall_thruster", "lotka_volterra".
+    Types are "lorenz", "harm_osc", "lotka_volterra".
     Model parameters and external modulation amplitude and frequency are modifiable.
 
     """
