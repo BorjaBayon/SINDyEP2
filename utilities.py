@@ -2,15 +2,32 @@
 Functions for data pre(post)-processing: measuring correlation, plotting data, printing models...
 """
 import numpy as np
+import matplotlib.pyplot as plt
 from scipy.integrate import odeint
 from sklearn.metrics import mean_squared_error
 
-def print_model(coefs, score, features_names_list, var_name):
-    inds_nonzero = np.ravel(np.nonzero(coefs))
+
+def print_model(coefs, features_names_list, score = 0., var_name = "var"):
+    """
+    Prints the symbolic ODE of the target variable given its sparse coefficient vector and feature library names.
+
+    Parameters
+    ----------
+    coefs : ndarray of shape (n_features,)
+        Model coefficients
+    feature_names_list : list of shape (n_features,)
+        List of strings containing the feature names corresponding to each term of coefs
+    score : int, default = "var"
+        Model score
+    var_name : string, default = "var"
+        Name of the target variable 
+    """
+    inds_nonzero = np.ravel(np.nonzero(coefs)) # to only print non-zero terms
     text = "[%.2f] "%(score) + var_name + "_dot = "
     for i in range(len(inds_nonzero)):
         text += "+ %8.2f %s " % (coefs[inds_nonzero[i]], features_names_list[inds_nonzero[i]])
     print(text)
+
 
 def print_hierarchy_f(print_hierarchy, coef_list, n_terms, score, feature_names_list, var_name = "var"):
     """
@@ -22,12 +39,24 @@ def print_hierarchy_f(print_hierarchy, coef_list, n_terms, score, feature_names_
     IN: coef_list [n_models, n_features], n_terms [n_models], score [n_models], 
     feature_names_list [n_features]
     OUT: 
+    Parameters
+    ----------
+    print_hierarchy : int
+        Keyword
+    coefs : ndarray of shape (n_models, n_features)
+        Model coefficients
+    feature_names_list : list of shape (n_features,)
+        List of strings containing the feature names corresponding to each term of coefs
+    score : int, default = "var"
+        Model score
+    var_name : string, default = "var"
+        Name of the target variable 
     """
     if print_hierarchy == 0:
         return 
     
     elif print_hierarchy == 1:
-
+        ## Select only the models in the Pareto front
         costs = np.c_[n_terms, 1 - score]
         is_efficient = np.ones(costs.shape[0], dtype = bool)
         for i, c in enumerate(costs):

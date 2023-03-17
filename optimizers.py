@@ -18,7 +18,7 @@ def ALASSO_path(Theta, X_dot, eps = 1e-3, n_alphas = 100):
     Theta : ndarray of shape (n_samples, n_features)
         Library of features, typically polynomial
     X_dot : ndarray of shape (n_samples,)
-        Derivative of variable to be fit
+        Derivative of target variable
     eps : float, default=1e-3. 
         Length of the path; eps = alpha_min / alpha_max where alpha_max = np.sqrt( np.sum(X_dot) / (n_samples) ).max()
     n_alphas: int, default=100
@@ -53,7 +53,7 @@ def LASSO_path(Theta, X_dot, n_alphas = 100, eps = 0.001):
     Theta : ndarray of shape (n_samples, n_features)
         Library of features, typically polynomial
     X_dot : ndarray of shape (n_samples,)
-        Derivative of variable to be fit
+        Derivative of target variable
     eps : float, default=1e-3. 
         Length of the path; eps = alpha_min / alpha_max where alpha_max = np.sqrt( np.sum(X_dot) / (n_samples) ).max()
     n_alphas: int, default=100
@@ -133,7 +133,7 @@ def fit_supports(Theta, X_dot, supports):
     Theta : ndarray of shape (n_samples, n_features)
         Library of features, typically polynomial
     X_dot : ndarray of shape (n_samples,)
-        Derivative of variable to be fit
+        Derivative of target variable
     supports : ndarray of shape (n_supports,)
 
     Returns
