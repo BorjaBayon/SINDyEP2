@@ -84,14 +84,16 @@ def print_hierarchy_f(print_hierarchy, coef_list, n_terms, score, feature_names_
 
 ### Generate, add noise and plot synthetic data
 
-def generate_data(time_span, n_points, type, xi=1, w0=3,
-                  a = 2/3, b = 1, c = 1, d = 1/3, A = 0, f = 5, state0 = 0):
+def generate_data(time_span, n_points, type, state0 = 0
+                rho = 28.0, sigma = 10.0, beta = 8.0 / 3.0,
+                xi = 1, w0 = 3,
+                a = 2/3, b = 1, c = 1, d = 1/3, 
+                A = 0, f = 5):
     """
     Generate n_points during time_span of certain data set for initial condition state0. 
     Types are "lorenz", "harm_osc", "hall_thruster", "lotka_volterra".
-    "hall_thuster" gives n_points of ion and neutral density of a point in the middle of a 300V HET discharge.
-    Oscillator parameters (damping xi, frequency w0) are modifyable.
-    Lotka-Volterra parameters (a, b, c, d) and modulation (A, f) are also modifyable.
+    Model parameters and external modulation amplitude and frequency are modifiable.
+
     """
     def f_lorenz(state, t):
         x, y, z = state  # Unpack the state vector
@@ -106,7 +108,6 @@ def generate_data(time_span, n_points, type, xi=1, w0=3,
         return a*x - b*x*y, c*x*y - d*y
 
     if type == "lorenz":
-        rho = 28.0; sigma = 10.0; beta = 8.0 / 3.0
         if state0 is 0: state0 = [8.0, 7.0, 15.0]
         func = f_lorenz
 
