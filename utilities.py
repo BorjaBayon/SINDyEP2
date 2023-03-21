@@ -81,7 +81,7 @@ def print_hierarchy_f(print_hierarchy, coef_list, n_terms, score, feature_names_
 
 ### Generate, add noise and plot synthetic data
 
-def generate_data(time_span, n_points, type, state0 = 0
+def generate_data(time_span, n_points, type, state0 = 0,
                 rho = 28.0, sigma = 10.0, beta = 8.0 / 3.0,
                 xi = 1, w0 = 3,
                 a = 2/3, b = 1, c = 1, d = 1/3, 
