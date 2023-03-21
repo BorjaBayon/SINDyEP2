@@ -31,14 +31,11 @@ def print_model(coefs, features_names_list, score = 0., var_name = "var"):
 
 def print_hierarchy_f(print_hierarchy, coef_list, n_terms, score, feature_names_list, var_name = "var"):
     """
-    Depending on print_hierarchy keyword:
+    Depending on print_hierarchy flag:
     If print_hierarchy = 0, doesn't print anything
     If print_hierarchy = 1, prints the Pareto front models (best model for every n_terms)
     If print_hierarchy = 2, prints every model found
 
-    IN: coef_list [n_models, n_features], n_terms [n_models], score [n_models], 
-    feature_names_list [n_features]
-    OUT: 
     Parameters
     ----------
     print_hierarchy : int
@@ -91,9 +88,8 @@ def generate_data(time_span, n_points, type, state0 = 0
                 A = 0, f = 5):
     """
     Generate n_points during time_span of certain data set for initial condition state0. 
-    Types are "lorenz", "harm_osc", "lotka_volterra".
+    Types are "lorenz", "harm_osc", "lotka_volterra". External sinusoidal modulation can be added to the integrated trajectory.
     Model parameters and external modulation amplitude and frequency are modifiable.
-
     """
     def f_lorenz(state, t):
         x, y, z = state  # Unpack the state vector

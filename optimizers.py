@@ -94,7 +94,7 @@ def identify_unique_supports(coef_path, n_max_features = 10):
     coef_path : ndarray of shape (n_features, n_alphas)
         Coefficients along the path
     n_max_features : int, default = 10
-        Maximum of number of features 
+        Maximum of number of features when looking for supports
 
     Returns
     -------
