@@ -148,19 +148,19 @@ def plot_data(data, fs, n_plotted=2000, bins=100, names=0, compare = False, data
         f, P = FourierTransform(var, fs, plot=False)
         if type(names) != int: axs[i, 0].plot(var[:n_plotted], label = names[i]); axs[i, 0].legend()
         else: axs[i, 0].plot(var[:n_plotted])
-        axs[i, 1].plot(ps.SmoothedFiniteDifference()(var, 1/fs)[:n_plotted])
+        axs[i, 1].plot(np.diff(var)[:n_plotted]*fs)
         axs[i, 2].semilogx(f, P)
         axs[i, 3].hist(var, bins=bins)
-        axs[i, 4].scatter(var[:n_plotted], ps.SmoothedFiniteDifference()(var, 1/fs)[:n_plotted], s=3)
+        axs[i, 4].scatter(var[:n_plotted], np.diff(var)[:n_plotted]*fs, s=3)
 
         if compare == True: 
             var2 = data2[:,i]
             f, P = FourierTransform(var2, fs, plot=False)
             axs[i, 0].plot(var2[:n_plotted], alpha = 0.5)
-            axs[i, 1].plot(ps.SmoothedFiniteDifference()(var2, 1/fs)[:n_plotted], alpha = 0.5)
+            axs[i, 1].plot(np.diff(var2)[:n_plotted]*fs, alpha = 0.5)
             axs[i, 2].semilogx(f, P, alpha=0.5)
             axs[i, 3].hist(var2, bins=bins, alpha=0.5)
-            axs[i, 4].scatter(var2[:n_plotted], ps.SmoothedFiniteDifference()(var2, 1/fs)[:n_plotted], s=3, alpha=0.5)
+            axs[i, 4].scatter(var2[:n_plotted], np.diff(var2)[:n_plotted]*fs, s=3, alpha=0.5)
 
 
 def FourierTransform(Xt, Fs, plot=True):
