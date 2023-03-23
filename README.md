@@ -2,7 +2,7 @@
 **Implementation of the *Sparse Identification of Nonlinear Dynamics* algorithms as used by UC3M's [EP2 team](https://ep2.uc3m.es/) for solving the inverse problem in Electric Propulsion systems. The focus of our implementation is on finding the true model, rather than the model that best fits the data.**
 
 
-##Intended workflow
+## Intended workflow
 Similar to the original SINDy, the intent is for the process of discovering the system dynamics as follows:
 1. Gather time-series for the relevant variables (both the target and the supposed dependencies) from experiment or simulation.
 2. Construct library of candidate functionals / features (those expected to govern the dynamics).
