@@ -4,7 +4,8 @@ Functions related to the main workflow of the sparse identification process
 from CORE import ALASSO_path
 from CORE import identify_unique_supports
 from CORE import fit_supports
-from CORE import find_optimal_support
+from CORE import find_Pareto_front
+from CORE import find_Pareto_knee
 from CORE import remove_duplicate_supports
 from analysis import *
 from preprocessing import *
@@ -12,8 +13,9 @@ from preprocessing import *
 import numpy as np
 import warnings
 
-def run_search(Theta, X_dot, var, 
+def run_search(Theta, X_dot, var,
                n_bootstraps = 100, n_features_to_drop = 2, n_max_features = 5,
+               eps = 1e-5, n_alphas = 100,
                feature_names_list = [" "], print_hierarchy = 0):
     """
     Performs a search of the ALASSO solution (regularization) path, indentifies supports and fits them with OLS, returning the optimal model
@@ -33,6 +35,10 @@ def run_search(Theta, X_dot, var,
         Number of columns to delete from Theta in feature bootstrapping
     n_max_features : int, default = 5
         Maximum of number of features when looking for supports
+    eps : float, default = 1e-3. 
+        Length of the path; eps = alpha_min / alpha_max where alpha_max = np.sqrt( np.sum(X_dot) / (n_samples) ).max()
+    n_alphas: int, default=100
+        Number of alphas along the regularization path
     feature_names_list : list of shape (n_features,), default = [" "]
         List of strings containing the feature names corresponding to each term of coefs
     print_hierarchy : int, default = 0
@@ -45,7 +51,7 @@ def run_search(Theta, X_dot, var,
     opt_score : float
         R2 score of the optimal model
     """
-    coefs = np.zeros((Theta.shape[1], 100, n_bootstraps))
+    coefs = np.zeros((Theta.shape[1], n_alphas, n_bootstraps))
     supports = []
 
     with warnings.catch_warnings():
@@ -59,13 +65,48 @@ def run_search(Theta, X_dot, var,
                 Theta_new, X_dot_new, inds = Theta, X_dot, np.arange(Theta.shape[1]) # if n_bootstraps = 1, the single bootstrap contains the entire dataset
 
 
-            alphas, coefs[inds, :, i] = ALASSO_path(Theta_new, X_dot_new[:,var].reshape(-1,1),)
+            alphas, coefs[inds, :, i] = ALASSO_path(Theta_new, X_dot_new[:,var].reshape(-1,1),
+                                                    eps = eps, n_alphas = n_alphas)
             supports += identify_unique_supports(coefs[:,:,i], n_max_features = n_max_features)
         
     supports = remove_duplicate_supports(supports)
     coef_list, score, n_terms = fit_supports(Theta, X_dot[:,var], supports)
-    opt_coefs, index_min = find_optimal_support(coef_list, score, n_terms)
+    front_coefs, front_idx = find_Pareto_front(coef_list, score, n_terms)
+    opt_coefs, opt_idx = find_Pareto_knee(coef_list, score, n_terms)
     
-    print_hierarchy_f(print_hierarchy, coef_list, n_terms, score, feature_names_list)
+    if print_hierarchy == 1:
+        print_hierarchy_f(front_coefs, n_terms[front_idx], score[front_idx], feature_names_list)
+    elif print_hierarchy == 2:
+        print_hierarchy_f(coef_list, n_terms, score, feature_names_list)
+
+    return opt_coefs, score[opt_idx], front_coefs
+
+
+def run_model_search(Theta, fTheta, X_dot, X, t, u = None,
+               n_bootstraps = 100, n_features_to_drop = 2, n_max_features = 5,
+               eps = 1e-3, n_alphas = 100,
+               feature_names_list = [" "], print_hierarchy = 0):
     
-    return opt_coefs, score[index_min]
+    n_targets = X_dot.shape[1]
+    coef_array = []
+
+    ## temporary
+    opt_model = []
+    opt_score = np.zeros(n_targets)
+
+    for target in range(n_targets):
+        opt_coefs, opt_score[target], front_coefs = run_search(Theta, X_dot, target,
+               n_bootstraps, n_features_to_drop, n_max_features,
+               eps, n_alphas,
+               feature_names_list, print_hierarchy)
+        
+        coef_array.append(front_coefs)
+        opt_model.append(opt_coefs)
+
+    models_array = get_array_of_models(coef_array)
+    score_int = model_integration(models_array, fTheta, X, t, u, n_windows=100)
+    ordered_idx = sorted(np.arange(len(models_array)), key = lambda k: 1 - score_int[k])
+    best_idx = ordered_idx[0] #model with the highest score
+    best_model = models_array[best_idx]
+    
+    return best_model, score_int[best_idx], opt_model, opt_score

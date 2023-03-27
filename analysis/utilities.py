@@ -2,12 +2,15 @@
 Functions for data pre(post)-processing: measuring correlation, plotting data, printing models...
 """
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
+import seaborn as sns
+from scipy.signal import butter, sosfiltfilt
 from scipy.integrate import odeint
 from sklearn.metrics import mean_squared_error
 
 
-def print_model(coefs, features_names_list, score = 0., var_name = "var"):
+def print_model(coefs, feature_names, score = 0., var_name = "var"):
     """
     Prints the symbolic ODE of the target variable given its sparse coefficient vector and feature library names.
 
@@ -15,7 +18,7 @@ def print_model(coefs, features_names_list, score = 0., var_name = "var"):
     ----------
     coefs : ndarray of shape (n_features,)
         Model coefficients
-    feature_names_list : list of shape (n_features,)
+    feature_names : list of shape (n_features,)
         List of strings containing the feature names corresponding to each term of coefs
     score : int, default = "var"
         Model score
@@ -24,22 +27,17 @@ def print_model(coefs, features_names_list, score = 0., var_name = "var"):
     """
     inds_nonzero = np.ravel(np.nonzero(coefs)) # to only print non-zero terms
     text = "[%.2f] "%(score) + var_name + "_dot = "
-    for i in range(len(inds_nonzero)):
-        text += "+ %8.2f %s " % (coefs[inds_nonzero[i]], features_names_list[inds_nonzero[i]])
+    for ind in inds_nonzero:
+        text += "+ %.2e %s " % (coefs[ind], feature_names[ind])
     print(text)
 
 
-def print_hierarchy_f(print_hierarchy, coef_list, n_terms, score, feature_names_list, var_name = "var"):
+def print_hierarchy_f(coef_list, n_terms, score, feature_names_list, var_name = "var"):
     """
-    Depending on print_hierarchy flag:
-    If print_hierarchy = 0, doesn't print anything
-    If print_hierarchy = 1, prints the Pareto front models (best model for every n_terms)
-    If print_hierarchy = 2, prints every model found
+    Prints model hierarchy for var_dot.
 
     Parameters
     ----------
-    print_hierarchy : int
-        Keyword
     coefs : ndarray of shape (n_models, n_features)
         Model coefficients
     feature_names_list : list of shape (n_features,)
@@ -49,21 +47,6 @@ def print_hierarchy_f(print_hierarchy, coef_list, n_terms, score, feature_names_
     var_name : string, default = "var"
         Name of the target variable 
     """
-    if print_hierarchy == 0:
-        return 
-    
-    elif print_hierarchy == 1:
-        ## Select only the models in the Pareto front
-        costs = np.c_[n_terms, 1 - score]
-        is_efficient = np.ones(costs.shape[0], dtype = bool)
-        for i, c in enumerate(costs):
-            if is_efficient[i]:
-                is_efficient[is_efficient] = np.any(costs[is_efficient]<c, axis=1)  # Keep any point with a lower cost
-                is_efficient[i] = True  # And keep self
-
-        coef_list = coef_list[is_efficient]; n_terms = n_terms[is_efficient]; score = score[is_efficient]
-        ### CHECK: should not, but does this modify original coef_list?
-    
     print("\n#############################################\nDisplaying identified models:\n")
     
     n_models = coef_list.shape[0]
@@ -72,7 +55,7 @@ def print_hierarchy_f(print_hierarchy, coef_list, n_terms, score, feature_names_
     print_score = score[idx]
 
     for j in range(n_models):
-        print_model(print_coef[j], print_score[j], feature_names_list, var_name)
+        print_model(print_coef[j], feature_names_list, print_score[j], var_name)
 
     print("#############################################\n")
 
@@ -129,6 +112,13 @@ def add_noise(data, percentage):
     data_noisy = data + np.random.normal(loc=0, scale = rmse*percentage, size = data.shape)
     return data_noisy
 
+def butter_lowpass_filter(data, cutoff, fs, order=5):
+    """
+    Butterworth-style low pass filter.
+    """
+    sos = butter(order, cutoff, fs=fs, btype='low', analog=False, output='sos')
+    y = sosfiltfilt(sos, data) #passes filter in both directions to avoid introducing phase delays
+    return y
 
 def plot_data(data, fs, n_plotted=2000, bins=100, names=0, compare = False, data2 = None):
     """
@@ -161,6 +151,15 @@ def plot_data(data, fs, n_plotted=2000, bins=100, names=0, compare = False, data
             axs[i, 2].semilogx(f, P, alpha=0.5)
             axs[i, 3].hist(var2, bins=bins, alpha=0.5)
             axs[i, 4].scatter(var2[:n_plotted], np.diff(var2)[:n_plotted]*fs, s=3, alpha=0.5)
+
+
+def measure_correlation(data, column_names):
+    pddata = pd.DataFrame(data)
+    pddata.columns = column_names
+
+    corr = pddata.corr(method = "pearson")
+    fig, axs = plt.subplots(ncols=1, figsize=(20, 15))
+    sns.heatmap(np.abs(corr), annot = True, ax=axs, vmin=0)
 
 
 def FourierTransform(Xt, Fs, plot=True):

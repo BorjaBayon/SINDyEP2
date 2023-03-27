@@ -162,7 +162,57 @@ def fit_supports(Theta, X_dot, supports):
     return coefs, score, n_terms
 
 
-def find_optimal_support(coefs, score, n_terms):
+
+
+
+
+
+
+#############################################################
+## Pareto front analysis
+
+
+def find_Pareto_front(coefs, score, n_terms, n_depth = 1, n_min_terms = 0):
+    """
+    For every model with n_terms returns only the one with the biggest score
+
+    Parameters
+    ----------
+    coefs : ndarray of shape (n_supports, n_features)
+        Unbiased coefficients along the path.
+    score : ndarray of shape (n_supports,)
+        R2 Score on the derivatives for each fitted support.
+    n_terms : ndarray of shape (n_supports,)
+        Size of each support, i.e. number of non-zero terms of each model.
+    n_depth: int, default = 1
+        Number of models to return per n_terms.
+    n_min_terms: int, default = 0
+        Minimum number of terms in returned models.
+
+    Returns
+    -------
+    front_coef : ndarray of shape (n_front_supports, n_features)
+        Unbiased coefficients of the models in the Pareto front.
+    front_idx : ndarray of shape (n_front_supports,)
+        Indexes of Pareto front models in original coefs array.
+    """
+    front_coefs = np.empty((0, coefs.shape[1]))
+    front_idx = []
+    for terms in np.unique(n_terms):
+        if terms >= n_min_terms:
+            idx = np.argwhere(n_terms == terms).flatten()
+            ordered_idx = sorted(idx, key = lambda k: 1 - score[k])
+
+            depth = 0
+            while depth < n_depth and depth < len(ordered_idx):
+                front_coefs = np.append(front_coefs, coefs[ ordered_idx[depth] ][None,:], axis=0)
+                front_idx = np.append(front_idx, int(ordered_idx[depth]))
+                depth += 1
+                 
+    return front_coefs, front_idx.astype(int)
+
+
+def find_Pareto_knee(coefs, score, n_terms):
     """
     Computes Pareto distance for each model and returns the one that minimizes said distance (the "Pareto knee" model):
 
