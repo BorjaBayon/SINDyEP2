@@ -174,7 +174,7 @@ def fit_supports(Theta, X_dot, supports):
 
 def find_Pareto_front(coefs, score, n_terms, n_depth = 1, n_min_terms = 0):
     """
-    For every model with n_terms returns only the one with the biggest score
+    For every model with n_terms returns the first n_depth with the biggest score
 
     Parameters
     ----------
