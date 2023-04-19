@@ -82,9 +82,9 @@ def run_search(Theta, X_dot, var,
     return opt_coefs, score[opt_idx], front_coefs
 
 
-def run_model_search(Theta, fTheta, X_dot, X, t, u = None,
+def run_model_search(Theta, fTheta, X_dot, X, t, u = None,  test_flag = 0,
                n_bootstraps = 100, n_features_to_drop = 2, n_max_features = 5,
-               eps = 1e-3, n_alphas = 100,
+               eps = 1e-5, n_alphas = 100,
                feature_names_list = [" "], print_hierarchy = 0):
     
     n_targets = X_dot.shape[1]
@@ -104,9 +104,18 @@ def run_model_search(Theta, fTheta, X_dot, X, t, u = None,
         opt_model.append(opt_coefs)
 
     models_array = get_array_of_models(coef_array)
-    score_int = model_integration(models_array, fTheta, X, t, u, n_windows=100)
+
+    # First integrate models in short time windows
+    score_int = model_integration(models_array, fTheta, X, t, u, n_windows=100, max_w_size=200)
     ordered_idx = sorted(np.arange(len(models_array)), key = lambda k: 1 - score_int[k])
+    models_array = models_array[ordered_idx[:10]]
+    
+    # Now integrate best 10 performing models on longer windows
+    score_int = model_integration(models_array, fTheta, X, t, u, n_windows=50, max_w_size=3000)
+    n_terms = np.sum(np.count_nonzero(models_array, axis = 1),axis=1)
+    ordered_idx = sorted(np.arange(len(models_array)), key = lambda k: 1 - score_int[k])
+
     best_idx = ordered_idx[0] #model with the highest score
     best_model = models_array[best_idx]
-    
+
     return best_model, score_int[best_idx], opt_model, opt_score

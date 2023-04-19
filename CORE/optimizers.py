@@ -172,7 +172,7 @@ def fit_supports(Theta, X_dot, supports):
 ## Pareto front analysis
 
 
-def find_Pareto_front(coefs, score, n_terms, n_depth = 1, n_min_terms = 0):
+def find_Pareto_front(coefs, score, n_terms, n_depth = 1, n_min_terms = 0, n_max_terms = 5):
     """
     For every model with n_terms returns only the one with the biggest score
 
@@ -184,10 +184,12 @@ def find_Pareto_front(coefs, score, n_terms, n_depth = 1, n_min_terms = 0):
         R2 Score on the derivatives for each fitted support.
     n_terms : ndarray of shape (n_supports,)
         Size of each support, i.e. number of non-zero terms of each model.
-    n_depth: int, default = 1
+    n_depth : int, default = 1
         Number of models to return per n_terms.
-    n_min_terms: int, default = 0
+    n_min_terms : int, default = 0
         Minimum number of terms in returned models.
+    n_max_terms : int, default = 5
+        Maximum number of terms in returned models.
 
     Returns
     -------
@@ -197,9 +199,10 @@ def find_Pareto_front(coefs, score, n_terms, n_depth = 1, n_min_terms = 0):
         Indexes of Pareto front models in original coefs array.
     """
     front_coefs = np.empty((0, coefs.shape[1]))
-    front_idx = []
+    front_idx = np.empty(0)
+
     for terms in np.unique(n_terms):
-        if terms >= n_min_terms:
+        if (terms >= n_min_terms) and (terms <= n_max_terms):            
             idx = np.argwhere(n_terms == terms).flatten()
             ordered_idx = sorted(idx, key = lambda k: 1 - score[k])
 
