@@ -7,6 +7,9 @@ import itertools
 from sklearn.metrics import r2_score
 
 def euler_integration(X0, beta, t_span, fTheta, u):
+    """
+    Implements i.e. X[t+1] = X[t] + X'[t]*dt with X'[t] = Theta(X, u)*beta
+    """
     def fRHS(X, u, beta):
         return fTheta(X, u).dot(beta.T)
     
@@ -70,9 +73,21 @@ def model_integration(coefs, fTheta, X, t, u = None, n_windows = 32, min_w_size 
 
 
 def get_array_of_models(coef_array):
-    idx_list = [np.arange(len(coefs_list)) for coefs_list in coef_array]
-    idx_comb_array = list(itertools.product(*idx_list))
+    """
+    Obtains models for the full system dynamics by combining models for each of the target variables
+
+    Parameters
+    ----------
+    coef_array : list of shape (n_targets, n_models(target), n_features)
+        Coefficients of the candidate models for each target variable.
+
+    Returns
+    -------
+    models_array : ndarray of shape (n_system_models, n_targets, n_features)
+    """
+    idx_list = [np.arange(len(coefs_list)) for coefs_list in coef_array] #list of candidate model index for each var_dot
+    idx_comb_array = list(itertools.product(*idx_list)) #returns list of lists each with the index to take from each var_dot mode list
     models_array = np.array([[x[i] for i, x in zip(idx_comb_array[j], coef_array)] 
-                      for j in range(len(idx_comb_array))])
+                      for j in range(len(idx_comb_array))]) 
     
     return models_array
