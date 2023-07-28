@@ -23,6 +23,31 @@ def euler_integration(X0, beta, t_span, fTheta, u):
     return X
 
 
+def RK45_integration(X0, beta, t_span, fTheta, u):
+    """
+    Implements a Runge-Kutta 45 integration scheme
+    """
+    def fRHS(X, u, beta):
+        return fTheta(X, u).dot(beta.T)
+    X = np.zeros((t_span.shape[0], X0.shape[0]))
+    X[0] = X0
+
+    for t, dt in enumerate((t_span[1:] - t_span[:-1])):
+        # try:
+        k1 = fRHS(X[t], u[t], beta).flatten()
+        k2 = fRHS(X[t] + k1*dt/2, (u[t] + u[t+1])/2, beta).flatten()
+        k3 = fRHS(X[t] + k2*dt/2, (u[t] + u[t+1])/2, beta).flatten()
+        k4 = fRHS(X[t] + k3*dt, u[t+1], beta).flatten()
+        X[t+1] = X[t] + (k1 + 2*k2 + 2*k3 + k4)*dt/6
+        # except ValueError:
+        #     print("Huh")
+        #     X[:] = 0 #if the integration breaks, the rest of the trajectory is set to 0
+        #     break
+
+    return X
+    
+
+
 def model_integration(coefs, fTheta, X, t, u = None, n_windows = 32, min_w_size = 100, max_w_size = 400):
     """
     Use random windows of integration to evaluate each model within coefs based on the data trajectories.
@@ -64,7 +89,7 @@ def model_integration(coefs, fTheta, X, t, u = None, n_windows = 32, min_w_size 
         t_span = t[idx0:idx1]
 
         for model in range(n_models):
-            Xint = euler_integration(X[idx0], coefs[model], t_span, fTheta, u = u[idx0:idx1])
+            Xint = RK45_integration(X[idx0], coefs[model], t_span, fTheta, u = u[idx0:idx1])
             R2 = np.maximum(0, r2_score(X[idx0:idx1] , Xint))
             R2int[model] += R2
 
