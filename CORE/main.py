@@ -1,29 +1,35 @@
 """
 Functions related to the main workflow of the sparse identification process
 """
-from CORE import ALASSO_path
+from CORE import ALASSOp
+from CORE import LASSOp	
+from CORE import STLSQp
+from CORE import STRidgep
 from CORE import identify_unique_supports
 from CORE import fit_supports
 from CORE import find_Pareto_front
 from CORE import find_Pareto_knee
+from CORE import plot_Pareto_front
 from CORE import remove_duplicate_supports
 from analysis import *
 from preprocessing import *
+from sklearn.preprocessing import normalize
+from numpy.linalg import norm
 
 import numpy as np
 import warnings
 
 
-def run_search(Theta, X_dot, var,
-               n_bootstraps = 100, n_features_to_drop = 2, n_max_features = 5,
-               eps = 1e-5, n_alphas = 100,
+def run_search(Theta, X_dot, var, optimizer = ALASSOp, scorer="R2",
+               n_bootstraps = 1, n_features_to_drop = 0, n_max_features = 5,
+               eps = 1e-5, n_alphas = 100, n_thresholds = 10,
+               normalize_data = True,
                feature_names_list = [" "], print_hierarchy = 0):
     """
-    Performs a search of the ALASSO solution (regularization) path, indentifies supports and fits them with OLS, returning the optimal model
-    Can bootstrap data (n_bootstraps) and features (n_features_to_drop) randomly in the feature selection (support finding) process. 
-    Only keeps supports with a number of features below n_max_features 
-    IN: Theta [n_points, n_features], X_dot [n_points], supports [n_supports, n_features]
-
+    Performs a search of the optimizer solution path, indentifies supports and fits them with OLS, returning the optimal model.
+    Can bootstrap data (n_bootstraps) and features (n_features_to_drop) randomly in the feature selection process. 
+    Only keeps supports with a number of features below n_max_features.
+  
     Parameters
     ----------
     Theta : ndarray of shape (n_samples, n_features)
@@ -32,16 +38,24 @@ def run_search(Theta, X_dot, var,
         Derivatives of target variables
     var : int
         Position of target variable in X_dot, i.e. X_target = X_dot[:, var]
-    n_bootstraps : int, default = 100
-        Number of bootrstraps to generate
+    optimizer : function, default = ALASSOp
+        Function to use for the optimization process. Must be one of ALASSOp, LASSOp, STLSQp or STRidgep
+    scorer : string, default = "R2"
+        Scorer to use for the Pareto seach process. Must be one of "R2", "CV"
+    n_bootstraps : int, default = 1
+        Number of bootstraps to generate. If n_bootstraps = 1, the entire dataset is used for the search.
     n_features_to_drop : int, default = 2
-        Number of columns to delete from Theta in feature bootstrapping
+        Number of columns to delete from Theta in feature bootstrapping. If n_features_to_drop = 0, no culling is performed.
     n_max_features : int, default = 5
         Maximum of number of features when looking for supports
     eps : float, default = 1e-5. 
         Length of the path; eps = alpha_min / alpha_max where alpha_max = np.sqrt( np.sum(X_dot) / (n_samples) ).max()
     n_alphas: int, default=100
         Number of alphas along the regularization path
+    n_thresholds : int, default = 10
+        Number of thresholds to use in STLSQp and STRidgep
+    normalize_data : bool, default = True
+        Flag to normalize both sides of the minimization before fitting
     feature_names_list : list of shape (n_features,), default = [" "]
         List of strings containing the feature names corresponding to each term of coefs
     print_hierarchy : int, default = 0
@@ -49,123 +63,62 @@ def run_search(Theta, X_dot, var,
 
     Returns
     -------
-    opt_coefs : ndarray of shape (n_features,)
-        Unbiased coefficients of the Pareto optimal model
-    opt_score : float
-        R2 score of the optimal model
+    coef_list : ndarray of shape (n_models, n_features)
+        List of coefficients of the models found
+    score : ndarray of shape (n_models,)
+        Score of the models found
+    n_terms : ndarray of shape (n_models,)
+        Number of terms of the models found
+    front_idx : ndarray of shape (n_models,)
+        Indices of the models in the Pareto front
+    knee_idx : ndarray of shape (n_models,)
+        Indices of the models in the Pareto knee
     """
-    coefs = np.zeros((Theta.shape[1], n_alphas, n_bootstraps))
+    if optimizer == STLSQp or optimizer == STRidgep:
+        n_thresholds = n_thresholds
+    else:
+        n_thresholds = 1
+    coefs = np.zeros((Theta.shape[1], n_thresholds*n_alphas, n_bootstraps))
     supports = []
 
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore")
 
-
         for i in range(n_bootstraps):
             if n_bootstraps != 1:
-                Theta_new, X_dot_new, inds = bootstrapping(Theta, X_dot, n_features_to_drop = n_features_to_drop)
+                Theta_new, X_dot_new, inds = bootstrapping(Theta, X_dot, n_features_to_drop = n_features_to_drop, )
             else:
                 Theta_new, X_dot_new, inds = Theta, X_dot, np.arange(Theta.shape[1]) # if n_bootstraps = 1, the single bootstrap contains the entire dataset
 
+            if normalize_data is True:
+                X_dot_new, normXd = normalize(X_dot_new, return_norm=True, axis=0)
+                Theta_new, normTheta = normalize(Theta_new, return_norm=True, axis=0)
 
-            alphas, coefs[inds, :, i] = ALASSO_path(Theta_new, X_dot_new[:,var].reshape(-1,1),
-                                                    eps = eps, n_alphas = n_alphas)
+            alphas, coefs[inds, :, i] = optimizer(Theta_new, X_dot_new[:,var].reshape(-1,1),
+                                                    eps = eps, n_alphas = n_alphas, n_thresholds = n_thresholds,)
+
+            if normalize_data is True:
+                coefs[inds,:,i] = coefs[inds,:,i] * (normXd[var]/normTheta)[:,np.newaxis] # renormalize
             supports += identify_unique_supports(coefs[:,:,i], n_max_features = n_max_features)
         
-    supports = remove_duplicate_supports(supports)
-    coef_list, score, n_terms = fit_supports(Theta, X_dot[:,var], supports)
-    front_coefs, front_idx = find_Pareto_front(coef_list, score, n_terms)
-    opt_coefs, opt_idx = find_Pareto_knee(coef_list, score, n_terms)
-    
+    supports, inc_prob = remove_duplicate_supports(supports)
+    # perform model fitting and scoring on the original dataset, not the bootstrapped one
+    coef_list, score, n_terms = fit_supports(Theta, X_dot[:,var], supports, score_type=scorer)
+
+    if len(coef_list) == 0: # if no supports are found, return all-zeros model. Alternative: include all-zeros models from beggining
+        coef_list = np.zeros((1, Theta.shape[1]))
+        score = np.zeros(1)
+        n_terms = np.zeros(1)
+        inc_prob = np.zeros(1)
+
+    front_coefs, front_idx = find_Pareto_front(coef_list, score, n_terms, n_max_terms = n_max_features)
+    knee_coefs, knee_idx, pareto_distances = find_Pareto_knee(coef_list, score, n_terms)
+
     if print_hierarchy == 1:
-        print_hierarchy_f(front_coefs, n_terms[front_idx], score[front_idx], feature_names_list)
+       # print_hierarchy_f(coef_list[front_idx], (n_terms)[front_idx], score[front_idx], np.array(inc_prob)[front_idx], feature_names_list)
+        print_hierarchy_f(coef_list[front_idx], (n_terms)[front_idx], score[front_idx], pareto_distances[front_idx], feature_names_list)
+        plot_Pareto_front(coef_list, score, n_terms, inc_prob, front_idx, knee_idx)
     elif print_hierarchy == 2:
-        print_hierarchy_f(coef_list, n_terms, score, feature_names_list)
+        print_hierarchy_f(coef_list, n_terms, score, inc_prob, feature_names_list)
 
-    return opt_coefs, score[opt_idx], front_coefs
-
-def run_integral_model_search(Theta, fTheta, X_dot, X, t, u = None,
-               n_bootstraps = 100, n_features_to_drop = 2, n_max_features = 5,
-               eps = 1e-3, n_alphas = 100,
-               feature_names_list = [" "], print_hierarchy = 0):
-    """
-    Performs a search of the ALASSO solution (regularization) path for each target variable,
-    identifies supports and fits them with OLS, returning the optimal model.
-
-    Note that Theta and fTheta are passed as different arrays to still allow using the weak formulation
-    just by inputting the weak Theta and X; fTheta is only used for model integration.
-    
-    Parameters
-    ----------
-    Theta : ndarray of shape (n_samples, n_features)
-        Library of features, typically polynomial
-    fTheta : callable(X, u)
-        Computes Theta(X, u) such that given X[t] and u[t] it returns an array of shape (n_features, ).
-    X_dot : ndarray of shape (n_samples, n_targets)
-        Derivatives of target variables
-    X : ndarray of shape (n_samples, n_var)
-        Target and dependable variables.
-    t : ndarray of shape (n_samples,)
-        Time array.
-    u : ndarray of shape (n_samples, n_control_var), default = None
-        Control variables, if any.
-    var : int
-        Position of target variable in X_dot, i.e. X_target = X_dot[:, var]
-    n_bootstraps : int, default = 100
-        Number of bootrstraps to generate
-    n_features_to_drop : int, default = 2
-        Number of columns to delete from Theta in feature bootstrapping
-    n_max_features : int, default = 5
-        Maximum of number of features when looking for supports
-    eps : float, default = 1e-5. 
-        Length of the path; eps = alpha_min / alpha_max where alpha_max = np.sqrt( np.sum(X_dot) / (n_samples) ).max()
-    n_alphas: int, default=100
-        Number of alphas along the regularization path
-    feature_names_list : list of shape (n_features,), default = [" "]
-        List of strings containing the feature names corresponding to each term of coefs
-    print_hierarchy : int, default = 0
-        Flag to pass to print every model found (2), only the optimal ones (1) or to not print anything (0)
-
-    Returns
-    -------
-    best_model : ndarray of shape (n_features,)
-        Unbiased coefficients of the model with best score during integration
-    best_score : float
-        R2 score of the model with best score during integration
-    opt_model : ndarray of shape (n_features,)
-        Unbiased coefficients of the Pareto optimal model
-    opt_score : float
-        R2 score of the optimal model
-    """
-
-    n_targets = X_dot.shape[1]
-    coef_array = []
-
-    ## temporary
-    opt_model = []
-    opt_score = np.zeros(n_targets)
-
-    for target in range(n_targets):
-        opt_coefs, opt_score[target], front_coefs = run_search(Theta, X_dot, target,
-               n_bootstraps, n_features_to_drop, n_max_features,
-               eps, n_alphas,
-               feature_names_list, print_hierarchy)
-        
-        coef_array.append(front_coefs)
-        opt_model.append(opt_coefs)
-
-    models_array = get_array_of_models(coef_array)
-    
-    # First integrate models in short time windows
-    score_int = model_integration(models_array, fTheta, X, t, u, n_windows=100, max_w_size=200)
-    ordered_idx = sorted(np.arange(len(models_array)), key = lambda k: 1 - score_int[k])
-    models_array = models_array[ordered_idx[:10]]
-    
-    # Now integrate best 10 performing models on longer windows
-    score_int = model_integration(models_array, fTheta, X, t, u, n_windows=50, max_w_size=3000)
-    ordered_idx = sorted(np.arange(len(models_array)), key = lambda k: 1 - score_int[k])
-
-    best_idx = ordered_idx[0] #model with the highest score
-    best_model = models_array[best_idx]
-    
-    return best_model, score_int[best_idx], opt_model, opt_score
+    return coef_list, score, n_terms, front_idx, knee_idx

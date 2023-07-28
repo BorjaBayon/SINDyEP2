@@ -10,7 +10,7 @@ from scipy.integrate import odeint
 from sklearn.metrics import mean_squared_error
 
 
-def print_model(coefs, feature_names, score = 0., var_name = "var"):
+def print_model(coefs, feature_names, score = 0., inc_prob = 0., var_name = "var"):
     """
     Prints the symbolic ODE of the target variable given its sparse coefficient vector and feature library names.
 
@@ -26,13 +26,13 @@ def print_model(coefs, feature_names, score = 0., var_name = "var"):
         Name of the target variable 
     """
     inds_nonzero = np.ravel(np.nonzero(coefs)) # to only print non-zero terms
-    text = "[%.2f] "%(score) + var_name + "_dot = "
+    text = "[%.2f] [%.2f] "%(score, inc_prob) + var_name + "_dot = "
     for ind in inds_nonzero:
         text += "+ %.2e %s " % (coefs[ind], feature_names[ind])
     print(text)
 
 
-def print_hierarchy_f(coef_list, n_terms, score, feature_names_list, var_name = "var"):
+def print_hierarchy_f(coef_list, n_terms, score, inc_prob, feature_names_list, var_name = "var"):
     """
     Prints model hierarchy for var_dot.
 
@@ -53,9 +53,10 @@ def print_hierarchy_f(coef_list, n_terms, score, feature_names_list, var_name = 
     idx = sorted(range(n_models), key = lambda k: (n_terms[k], score[k])) # sort for printing in order
     print_coef = coef_list[idx]
     print_score = score[idx]
+    print_inc_prob = np.array(inc_prob)[idx]
 
     for j in range(n_models):
-        print_model(print_coef[j], feature_names_list, print_score[j], var_name)
+        print_model(print_coef[j], feature_names_list, print_score[j], print_inc_prob[j], var_name)
 
     print("#############################################\n")
 
@@ -68,10 +69,12 @@ def generate_data(time_span, n_points, type, state0 = 0,
                 rho = 28.0, sigma = 10.0, beta = 8.0 / 3.0,
                 xi = 1, w0 = 3,
                 a = 2/3, b = 1, c = 1, d = 1/3, 
-                A = 0, f = 5):
+                mu = 5,
+                A = 0.3, B = 4, F = 8, G = 1,
+                Amp = 0, f = 5):
     """
     Generate n_points during time_span of certain data set for initial condition state0. 
-    Types are "lorenz", "harm_osc", "lotka_volterra". External sinusoidal modulation can be added to the integrated trajectory.
+    Types are "lorenz", "harm_osc", "lotka_volterra", "vanderpol", "hadley". External sinusoidal modulation can be added to the integrated trajectory.
     Model parameters and external modulation amplitude and frequency are modifiable.
     """
     def f_lorenz(state, t):
@@ -85,6 +88,14 @@ def generate_data(time_span, n_points, type, state0 = 0,
     def f_lv(state, t):
         x, y = state
         return a*x - b*x*y, c*x*y - d*y
+    
+    def f_vanderpol(state, t):
+        x, y = state
+        return mu*(x - x**3/3 - y), x/mu
+
+    def f_hadley(state, t):
+        x, y, z = state
+        return -y**2 - z**2 - A*(x - F), x*y - B*x*z - y + G, B*x*y + x*z - z
 
     if type == "lorenz":
         if state0 is 0: state0 = [8.0, 7.0, 15.0]
@@ -98,11 +109,18 @@ def generate_data(time_span, n_points, type, state0 = 0,
         if state0 is 0: state0 = [1.0, 1.0]
         func = f_lv
 
+    elif type == "vanderpol":
+        if state0 is 0: state0 = [1.0, 1.0]
+        func = f_vanderpol
+
+    elif type == "hadley":
+        if state0 is 0: state0 = [-10.0, 0.0, 37.0]
+        func = f_hadley
+
     t = np.arange(0.0, time_span, time_span/n_points)
-    X = odeint(func, state0, t).T*(1 + A*np.sin(f*t))
+    X = odeint(func, state0, t).T*(1 + Amp*np.sin(f*t))
 
     return X.T, t
-
 
 def add_noise(data, percentage):
     """
@@ -112,7 +130,7 @@ def add_noise(data, percentage):
     data_noisy = data + np.random.normal(loc=0, scale = rmse*percentage, size = data.shape)
     return data_noisy
 
-def butter_lowpass_filter(data, cutoff, fs, order=5):
+def filter_data(data, cutoff, fs, order=5):
     """
     Butterworth-style low pass filter.
     """
