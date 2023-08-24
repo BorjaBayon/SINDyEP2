@@ -14,6 +14,7 @@ from CORE import remove_duplicate_supports
 from analysis import *
 from preprocessing import *
 from sklearn.preprocessing import normalize
+from sklearn.model_selection import train_test_split
 from numpy.linalg import norm
 
 import numpy as np
@@ -79,6 +80,8 @@ def run_search(Theta, X_dot, var, optimizer = ALASSOp, scorer="R2",
     else:
         n_thresholds = 1
     coefs = np.zeros((Theta.shape[1], n_thresholds*n_alphas, n_bootstraps))
+    idx = np.arange(Theta.shape[0])
+    (idx_train, idx_test) = train_test_split(idx, test_size=0.25)
     supports = []
 
     with warnings.catch_warnings():
@@ -86,9 +89,9 @@ def run_search(Theta, X_dot, var, optimizer = ALASSOp, scorer="R2",
 
         for i in range(n_bootstraps):
             if n_bootstraps != 1:
-                Theta_new, X_dot_new, inds = bootstrapping(Theta, X_dot, n_features_to_drop = n_features_to_drop, )
+                Theta_new, X_dot_new, inds = bootstrapping(Theta[idx_train], X_dot[idx_train], n_features_to_drop = n_features_to_drop, )
             else:
-                Theta_new, X_dot_new, inds = Theta, X_dot, np.arange(Theta.shape[1]) # if n_bootstraps = 1, the single bootstrap contains the entire dataset
+                Theta_new, X_dot_new, inds = Theta[idx_train], X_dot[idx_train], np.arange(Theta.shape[1]) # if n_bootstraps = 1, the single bootstrap contains the entire dataset
 
             if normalize_data is True:
                 X_dot_new, normXd = normalize(X_dot_new, return_norm=True, axis=0)
@@ -103,7 +106,10 @@ def run_search(Theta, X_dot, var, optimizer = ALASSOp, scorer="R2",
         
     supports, inc_prob = remove_duplicate_supports(supports)
     # perform model fitting and scoring on the original dataset, not the bootstrapped one
-    coef_list, score, n_terms = fit_supports(Theta, X_dot[:,var], supports, score_type=scorer)
+    coef_list, score, n_terms = fit_supports(Theta, X_dot[:,var], idx_train, idx_test, supports, score_type=scorer)
+    min_n_terms = np.min(n_terms)
+    if min_n_terms > 1:
+        print("Warning: no models with 1 term found. Minimum number of terms is {}".format(min_n_terms))
 
     if len(coef_list) == 0: # if no supports are found, return all-zeros model. Alternative: include all-zeros models from beggining
         coef_list = np.zeros((1, Theta.shape[1]))

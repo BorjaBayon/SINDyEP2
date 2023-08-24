@@ -221,20 +221,20 @@ def remove_duplicate_supports(lst):
     unique_elements_dict = {}
     for element in lst:
         if isinstance(element, list):
-            element = tuple(element)
+            element = tuple(element) # is it neccesary to convert to tuple?
         if element in unique_elements_dict:
             unique_elements_dict[element] += 1
         else:
             unique_elements_dict[element] = 1
 
     for key, value in unique_elements_dict.items():
-        unique_elements.append(key)
+        unique_elements.append(list(key))
         counts.append(value)
 
     return unique_elements, counts
 
 
-def fit_supports(Theta, X_dot, supports, score_type="R2"):
+def fit_supports(Theta, X_dot, idx_train, idx_test, supports, score_type="R2"):
     """
     Use Ordinary Least Squares to obtain the unbiased model estimates for each support.
     Normalizes the inputs for fitting but the returned coefficients are renormalized.
@@ -245,6 +245,10 @@ def fit_supports(Theta, X_dot, supports, score_type="R2"):
         Library of features, typically polynomial
     X_dot : ndarray of shape (n_samples,)
         Derivative of target variable
+    idx_train : ndarray of shape (n_samples_train,)
+        Indexes of training set
+    idx_test : ndarray of shape (n_samples_test,)
+        Indexes of test set
     supports : ndarray of shape (n_supports,)
 
     Returns
@@ -263,18 +267,16 @@ def fit_supports(Theta, X_dot, supports, score_type="R2"):
     score = np.zeros((len(supports)))
     n_terms = np.zeros((len(supports)))
 
-    test_split = Theta.shape[0]//2
-
     for i, sup in enumerate(supports):
-        coefs[i, sup] = np.linalg.lstsq(Thetan[:test_split,sup], X_dotn[:test_split].flatten(), rcond=None)[0]
+        coefs[i, sup] = np.linalg.lstsq(Thetan[:,sup][idx_train,:], X_dotn[idx_train].flatten(), rcond=None)[0]
         coefs[i] *= normXd[0]/(normTheta) # renormalize
-
+        
         n_terms[i] = np.count_nonzero(coefs[i])
 
         if score_type == "R2":
-            score[i] = r2_score(Theta[test_split:].dot(coefs[i]), X_dot[test_split:])
+            score[i] = r2_score(Theta[idx_test].dot(coefs[i]), X_dot[idx_test])
         elif score_type == "CV":
-            score[i] = cross_val_score(LinearRegression(), Theta[:,sup], X_dot, cv=10).mean()
+            score[i] = cross_val_score(LinearRegression(), Theta[idx_test,sup], X_dot[idx_test], cv=10).mean()
     
     return coefs, score, n_terms
 
